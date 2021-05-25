@@ -1,0 +1,93 @@
+# Compose file format version 3.8 is for Docker version 19.03.0 and higher, aka it works for our Docker version: 20.10.2
+version: '3.8'
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql-vcr-db
+    #always restart when it is stopped by something (not manually stopped)
+    restart: always
+    environment:
+      # Exposed port
+      # MYSQL_PORT: 49160
+      # Host of the local machine
+      # MYSQL_HOST: localhost
+      # Name of the database
+      MYSQL_DATABASE: 'users'
+      # Database username
+      MYSQL_USER: 'user'
+      # Database password
+      MYSQL_PASSWORD: 'secret'
+      # Root password
+      MYSQL_ROOT_PASSWORD: 'secret'
+    ports:
+      # <Port exposed> : < MySQL Port running inside container>
+      - '49160:3306'
+    expose:
+      # Opens port 3306 on the container
+      - '3306' # MUST BE 3306!
+      # Where our data will be persisted
+    # Initialise database based on sql-file
+    command: --init-file /docker-entrypoint-initdb.d/vr-collaboration-room-db-dev.sql
+    volumes:
+      - ./vr-collaboration-room-db-dev.sql:/docker-entrypoint-initdb.d/vr-collaboration-room-db-dev.sql
+      - mysql-db:/var/lib/mysql
+          
+  redis:
+    image: "redis:alpine"
+    command: redis-server --requirepass password
+    container_name: redis-token-db
+    restart: always
+    ports:
+      - '49161:6379'
+    expose:
+      - '6379'
+    volumes:
+      - token-db:/var/lib/redis
+           
+  session-microservice:
+    build: ./session-microservice
+    command: node server.js
+    container_name: session-microservice
+    environment:
+      # Exposed port
+      MYSQL_PORT: '3306'
+      # Host of the local machine
+      MYSQL_HOST: 'localhost'
+      # Name of the database
+      MYSQL_DATABASE: 'users'
+      # Database username
+      MYSQL_USER: 'root'
+      # Database password
+      MYSQL_PASSWORD: 'password'
+    ports:
+       - '49162:8080'
+    expose:
+      - '8080'
+    volumes:
+      - ./session-microservice:/app 
+volumes:
+  vr-collaboration-room-db-dev.sql:
+  mysql-db:
+  token-db:
+  session-microservice:
+  
+      # Open docker exec cmd
+        # "docker exec -it db99f7d01e4a sh"
+            # Then "redis-cli" to open server
+                #auth password
+        
+    #We use redis SET (strings) because it is faster than lpush(list) (add, delete and check is O(1))
+    #https://hashnode.com/post/differences-between-lists-and-sets-in-redis-ciojr30i401g3lh5364dkoqwv
+    
+    # A token needs: userID and userEmail
+    #Each token generated is added to redis via SET "userID" "userEmail"
+    # SET syntax: "SET name "key" EX 3600"
+    # EX 3600 = token expires after 3600 seconds
+    # NX = Only set the key if it don't exist
+    
+    # SET token1 "user1" EX 3600
+    # HMSET token1 userID "ID"
+    # HMSET token1 userEmail "ali.baba@gmail.com"
+    # HMGET token1 userID userEmail
+    # EXPIRE tokenname 60
+    # set token '{"userID: 1", "userEmail: ompa.lompa@gmail.com"}'
